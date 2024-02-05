@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package vertex_query;
+
+import "google/api/annotations.proto";
+
+option go_package = "github.com/gopherine/toadefi/vertex";
+
+// Message for different types of requests
+message QueryRequest {
+    oneof query {
+        StatusRequest status_request = 1;
+        ContractsRequest contracts_request = 2;
+    }
+}
+
+message StatusRequest {
+    // No additional fields required for status
+}
+
+message StatusResponse {
+    string status = 1;
+    string data = 2;
+    string request_type = 3;
+}
+
+message ContractsRequest {
+    string type=1;
+    // No additional fields required for contracts
+}
+
+// Message for response
+message QueryResponse {
+    oneof  data {
+        StatusResponse status=1;
+    }
+}
+
+// Service definition
+service VertexQueryService {
+    rpc Query(QueryRequest) returns (QueryResponse){
+    }
+}

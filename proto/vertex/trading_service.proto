@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package trading;
+
+service TradingService {
+  rpc InitiateConnection (ConnectionRequest) returns (ConnectionResponse) {}
+  // ... other rpcs ...
+}
+
+enum WebSocketConnectionType {
+  SUBSCRIPTION=0;
+}
+
+message ConnectionRequest {
+  // Add any parameters needed for initiating a connection
+  WebSocketConnectionType type=1;
+}
+
+message ConnectionResponse {
+  bool success = 1;
+  string message = 2; // Details about the connection status
+}
