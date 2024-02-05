@@ -2,6 +2,7 @@
 name = "toadefi_hft"
 version = "0.1.0"
 edition = "2021"
+authors = ["Atharva Pandey @gopherine"]
 
 
 [dependencies]
