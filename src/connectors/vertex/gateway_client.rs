@@ -24,19 +24,42 @@ impl GatewayClient {
         Ok(ws_stream)
     }
 
-    pub async fn send_query(&self, query_type: &str) -> Result<String, ConnectError> {
+    pub async fn send_query_with_type(
+        &self,
+        query_message: String,
+    ) -> Result<String, ConnectError> {
         let mut ws_stream = self.connect_to_gateway().await?;
+        // Construct and send the query based on the query_type argument
+        self.send_and_receive(&mut ws_stream, &query_message).await
+    }
 
-        // Construct and send the query
-        let query_message = serde_json::json!({ "type": query_type }).to_string();
+    // pub async fn place_order(&self, query_type:&str) -> Result<String, ConnectError> {
+    //     let mut ws_stream= self.connect_to_gateway().await?;
+
+    //     // get product id
+    //     // sign payload
+    //     // Construct and send place order payload
+    //     let query_message = serde_json::json!({
+
+    //     }).to_string();
+
+    //     ws_stream
+    //     .send(Message::Text(place_order_message)
+    // }
+
+    // send payload or recieve response from websocket
+    async fn send_and_receive(
+        &self,
+        ws_stream: &mut WebSocketStream<MaybeTlsStream<TcpStream>>,
+        message: &str,
+    ) -> Result<String, ConnectError> {
         ws_stream
-            .send(Message::Text(query_message))
+            .send(Message::Text(message.to_string()))
             .await
             .map_err(|e| ConnectError::new(e.into()))?;
 
-        // Await the response
-        if let Some(message) = ws_stream.next().await {
-            match message {
+        if let Some(response) = ws_stream.next().await {
+            match response {
                 Ok(msg) => match msg {
                     Message::Text(text) => Ok(text),
                     _ => Err(ConnectError::new(tungstenite::Error::AlreadyClosed)),

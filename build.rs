@@ -11,7 +11,7 @@ fn main() {
                 "proto/vertex/trading_service.proto",
                 "proto/vertex/vertex_query.proto",
             ],
-            &["proto", "googleapis"], // Adjust this path as per your project structurectory here
+            &["proto/", "proto/google/api/"], // Adjust this path as per your project structurectory here
         )
         .unwrap_or_else(|e| panic!("Failed to compile protos: {}", e));
 }

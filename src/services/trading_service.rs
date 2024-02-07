@@ -6,7 +6,7 @@ use crate::{
     trading_service::{
         self, query_response, trading_service_server::TradingService,
         vertex_query_service_server::VertexQueryService, ConnectionRequest, ConnectionResponse,
-        QueryRequest, QueryResponse, StatusResponse,
+        ContractsResponse, ProductsResponse, QueryRequest, QueryResponse, StatusResponse,
     },
 };
 
@@ -57,31 +57,61 @@ impl VertexQueryService for MyTradingService {
         &self,
         request: Request<QueryRequest>,
     ) -> Result<Response<QueryResponse>, Status> {
-        print!("{:?}", request);
+        println!("Hello {:?}", request);
         let query_request = request.into_inner();
         let query_type = determine_query_type(&query_request);
+        println!("Creating message for: getting {}", query_type);
+
+        // create query message based on the type of request
+        /*
+        Creating message for: getting get_status, get_all_products
+         */
+        let query_message = serde_json::json!({ "type": query_type }).to_string();
+
         let response_data = self
             .gateway_client
-            .send_query(query_type)
+            .send_query_with_type(query_message)
             .await
             .map_err(|e| Status::internal(format!("Query failed: {}", e)))?;
 
-        let json: StatusResponse = serde_json::from_str(&response_data)
-            .map_err(|e| Status::internal(format!("Failed to parse JSON: {}", e)))?;
+        // get response based on query type
 
-        let response = StatusResponse {
-            status: json.status.into(),
-            data: json.data.into(),
-            request_type: json.request_type.into(),
-        };
+        match query_type {
+            "status" => {
+                let json: StatusResponse = serde_json::from_str(&response_data)
+                    .map_err(|e| Status::internal(format!("Failed to parse JSON: {}", e)))?;
 
-        println!("{:?}", response);
+                let response = QueryResponse {
+                    data: Some(query_response::Data::Status(json)),
+                };
 
-        let response = QueryResponse {
-            data: Some(query_response::Data::Status(response)),
-        };
+                Ok(Response::new(response))
+            }
+            "contracts" => {
+                let json: ContractsResponse = serde_json::from_str(&response_data)
+                    .map_err(|e| Status::internal(format!("Failed to parse JSON: {}", e)))?;
 
-        Ok(Response::new(response))
+                let response = QueryResponse {
+                    data: Some(query_response::Data::Contracts(json)),
+                };
+
+                Ok(Response::new(response))
+            }
+            "all_products" => {
+                // Parse the JSON response and return it
+                let json: ProductsResponse = serde_json::from_str(&response_data)
+                    .map_err(|e| Status::internal(format!("Failed to parse JSON: {}", e)))?;
+
+                println!("{:?}", json);
+                let response = QueryResponse {
+                    data: Some(query_response::Data::Products(json)),
+                };
+
+                Ok(Response::new(response))
+            }
+            // Handle other query types...
+            _ => Err(Status::internal("Unsupported query type")),
+        }
     }
 }
 // Helper function to determine the query type
@@ -90,6 +120,7 @@ fn determine_query_type(query_request: &QueryRequest) -> &str {
     match query_request.query {
         Some(trading_service::query_request::Query::StatusRequest(_)) => "status",
         Some(trading_service::query_request::Query::ContractsRequest(_)) => "contracts",
+        Some(trading_service::query_request::Query::ProductsRequest(_)) => "all_products",
         // Add other cases as needed
         None => "unknown",
     }

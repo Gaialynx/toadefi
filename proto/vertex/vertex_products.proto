@@ -1,43 +1,8 @@
 syntax = "proto3";
 
-package vertex_query;
+package vertex_products;
 
-
-// Message for different types of requests
-message QueryRequest {
-    oneof query {
-        StatusRequest status_request = 1;
-        ContractsRequest contracts_request = 2;
-        ProductsRequest products_request = 3;
-    }
-}
-
-// No additional fields required for contracts, use of  of oneof
-message ProductsRequest {}
-message StatusRequest {}
-message ContractsRequest {
-    string type=1;
-}
-
-message StatusResponse {
-    string status = 1;
-    string data = 2;
-    string request_type = 3;
-}
-
-message ContractsResponse {
-    string status = 1;
-    ContractsData data = 2;
-    string request_type = 3;
-  }
-  message ContractsData {
-    string chain_id = 1;
-    string endpoint_addr = 2;
-    repeated string book_addrs = 3;
-  }
-
-
-  message ProductsResponse {
+message ProductsResponse {
     string status = 1;
     ProductsData data = 2;
     string request_type = 3;
@@ -104,18 +69,4 @@ message ContractsResponse {
     string collected_fees = 4;
     string lp_spread_x18 = 5;
   }
-
-// Message for response
-message QueryResponse {
-    oneof  data {
-        StatusResponse status=1;
-        ContractsResponse contracts=2;
-        ProductsResponse products=3;
-    }
-}
-
-// Service definition
-service VertexQueryService {
-    rpc Query(QueryRequest) returns (QueryResponse){
-    }
-}
+  
