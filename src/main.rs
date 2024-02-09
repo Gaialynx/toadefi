@@ -6,9 +6,21 @@ mod services;
 mod utils;
 
 // Include the generated protobuf code
+// Include the generated protobuf modules
 pub mod trading_service {
     tonic::include_proto!("trading");
+}
+pub mod vertex_products {
+    tonic::include_proto!("vertex_products");
+}
+pub mod vertex_symbols {
+    tonic::include_proto!("vertex_symbols");
+}
+pub mod vertex_query {
     tonic::include_proto!("vertex_query");
+}
+pub mod vertex_execute {
+    tonic::include_proto!("vertex_execute");
 }
 
 use crate::api::router as api_router;
@@ -19,7 +31,7 @@ use tonic::transport::Server;
 use tonic_web::GrpcWebLayer;
 use tower_http::cors::{Any, CorsLayer};
 
-use crate::services::trading_service::MyTradingService;
+use crate::services::vertex::client::VertexClient;
 use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main]
@@ -34,13 +46,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create a new instance of the GatewayClient
     let gateway_client = Arc::new(GatewayClient::new(config.clone()));
-    let trading_service = MyTradingService {
+    let trading_service = VertexClient {
         subscription_client: Arc::clone(&subscription_client),
         gateway_client: Arc::clone(&gateway_client),
     };
 
     // Create a new instance of the VertexQueryService
-    let vertex_query_service = MyTradingService {
+    let vertex_query_service = VertexClient {
         subscription_client: Arc::clone(&subscription_client),
         gateway_client: Arc::clone(&gateway_client),
     };
@@ -59,8 +71,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 trading_service::trading_service_server::TradingServiceServer::new(trading_service),
             ))
             .add_service(tonic_web::enable(
-                trading_service::vertex_query_service_server::VertexQueryServiceServer::new(
-                    MyTradingService {
+                vertex_query::vertex_query_service_server::VertexQueryServiceServer::new(
+                    VertexClient {
                         subscription_client: Arc::clone(&subscription_client),
                         gateway_client: Arc::clone(&gateway_client),
                     },

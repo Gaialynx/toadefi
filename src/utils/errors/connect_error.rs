@@ -2,6 +2,8 @@ use std::fmt;
 
 #[derive(Debug)]
 pub struct ConnectError {
+    // inner is used indirectly to store the error, hence the dead_code attribute
+    #[allow(dead_code)]
     inner: tungstenite::Error,
 }
 

@@ -1,12 +1,10 @@
 // src/api/handlers.rs
 
-use crate::{
-    services::trading_service::MyTradingService,
-    trading_service::{
-        trading_service_server::TradingService, vertex_query_service_server::VertexQueryService,
-        ConnectionRequest, ConnectionResponse, QueryRequest, QueryResponse,
-    },
-};
+use crate::services::vertex::client::VertexClient;
+use crate::trading_service::trading_service_server::TradingService;
+use crate::trading_service::{ConnectionRequest, ConnectionResponse};
+use crate::vertex_query::vertex_query_service_server::VertexQueryService;
+use crate::vertex_query::{StatusRequest, StatusResponse};
 
 use crate::utils::errors::api_error::ApiError;
 use axum::{Extension, Json};
@@ -17,7 +15,7 @@ use tracing::{error, info};
 
 #[axum::debug_handler]
 pub async fn initiate_connection_handler(
-    Extension(trading_service): Extension<Arc<MyTradingService>>,
+    Extension(trading_service): Extension<Arc<VertexClient>>,
     Json(payload): Json<ConnectionRequest>,
 ) -> Result<Json<ConnectionResponse>, ApiError> {
     info!("Received initiate_connection request: {:?}", payload);
@@ -43,10 +41,10 @@ pub async fn initiate_connection_handler(
 
 #[axum::debug_handler]
 pub async fn query_status_handler(
-    Extension(trading_service): Extension<Arc<MyTradingService>>,
-    Json(payload): Json<QueryRequest>,
-) -> Result<Json<QueryResponse>, StatusCode> {
-    match trading_service.as_ref().query(Request::new(payload)).await {
+    Extension(vertex_client): Extension<Arc<VertexClient>>,
+    Json(payload): Json<StatusRequest>,
+) -> Result<Json<StatusResponse>, StatusCode> {
+    match vertex_client.as_ref().status(Request::new(payload)).await {
         Ok(response) => Ok(Json(response.into_inner())),
         Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
     }

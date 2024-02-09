@@ -1,5 +1,4 @@
 syntax = "proto3";
-
 package vertex_products;
 
 message ProductsResponse {

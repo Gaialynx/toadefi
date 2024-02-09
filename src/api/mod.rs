@@ -2,11 +2,11 @@
 
 mod handlers;
 
-use crate::services::trading_service::MyTradingService;
+use crate::services::vertex::client::VertexClient;
 use axum::{routing::post, Extension, Router};
 use std::sync::Arc;
 
-pub fn router(trading_service: Arc<MyTradingService>) -> Router {
+pub fn router(trading_service: Arc<VertexClient>) -> Router {
     Router::new()
         .route(
             "/initiate_connection",

@@ -1,0 +1,35 @@
+// create proto for placing orders on vertex protocol
+syntax = "proto3";
+
+package vertex_execute;
+
+
+message PlaceOrderRequest {
+    string product_id = 1;
+    Order order = 2;
+    optional string digest = 3;
+    optional bool spot_leverage = 4;
+    optional int64 id = 5;
+}
+
+
+message Order {
+    bytes sender = 1;
+    string priceX18 = 2;
+    string amount = 3;
+    string expiration = 4;
+    string nonce = 5;
+}
+
+
+message PlaceOrderResponse {
+    string status = 1;
+    string signature = 2;
+    string digest = 3;
+    string request_type = 4;
+    int64 id = 5;
+}
+
+service VertexExecuteService{
+    rpc PlaceOrder(PlaceOrderRequest) returns (PlaceOrderResponse){};
+}

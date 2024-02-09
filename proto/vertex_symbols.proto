@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package vertex_symbols;
+
+message SymbolsRequest {
+  string type = 1;
+  repeated int32 product_ids = 2;
+  string product_type = 3;
+}
+
+message SymbolsResponse {
+  string status = 1;
+  Data data = 2;
+  string request_type = 3;
+}
+
+message Data {
+    map<string, Symbol> symbols = 1;
+}
+
+message Symbol {
+    string type = 1;
+    int32 product_id = 2;
+    string symbol = 3;
+    string price_increment_x18 = 4;
+    string size_increment = 5;
+    string min_size = 6;
+    string min_depth_x18 = 7;
+    string max_spread_rate_x18 = 8;
+    string maker_fee_rate_x18 = 9;
+    string taker_fee_rate_x18 = 10;
+    string long_weight_initial_x18 = 11;
+    string long_weight_maintenance_x18 = 12;
+  }

@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package vertex_query;
+
+import "vertex_products.proto";
+import "vertex_symbols.proto";
+
+// Message for different types of requests
+// message QueryRequest {
+//     oneof query {
+//         StatusRequest status_request = 1;
+//         ContractsRequest contracts_request = 2;
+//         ProductsRequest products_request = 3;
+//         vertex_symbols.SymbolsRequest symbols_request = 4;
+//     }
+// }
+
+// No additional fields required for contracts, use of  of oneof
+message ProductsRequest {
+    string type=1;
+}
+message StatusRequest {
+    string type=1;
+}
+message ContractsRequest {
+    string type=1;
+}
+
+message StatusResponse {
+    string status = 1;
+    string data = 2;
+    string request_type = 3;
+}
+
+message ContractsResponse {
+    string status = 1;
+    ContractsData data = 2;
+    string request_type = 3;
+  }
+  message ContractsData {
+    string chain_id = 1;
+    string endpoint_addr = 2;
+    repeated string book_addrs = 3;
+  }
+
+// Message for response
+message QueryResponse {
+    oneof  data {
+        StatusResponse status=1;
+        ContractsResponse contracts=2;
+        vertex_products.ProductsResponse products=3;
+        vertex_symbols.SymbolsResponse symbols=4;
+    }
+}
+
+// Service definition
+service VertexQueryService {
+    rpc Status(StatusRequest) returns (StatusResponse){}
+    rpc Contracts(ContractsRequest) returns (ContractsResponse){}
+    rpc Products(ProductsRequest) returns (vertex_products.ProductsResponse){}
+    rpc Symbols(vertex_symbols.SymbolsRequest) returns (vertex_symbols.SymbolsResponse){}
+}
