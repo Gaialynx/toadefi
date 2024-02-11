@@ -1,7 +1,8 @@
-use super::utils::signer::Signer;
-use super::vertex_auth::VertexAuth;
 use crate::config::Config;
-use crate::connectors::shared::websocket::{connect_and_authenticate, listen_to_messages};
+use crate::shared::utils::{
+    eth_signer::EthSigner,
+    websocket_utils::{connect_websocket, handle_websocket_messages},
+};
 use alloy_primitives::{Address, Uint};
 use alloy_sol_types::Eip712Domain;
 use futures_util::stream::SplitSink;
@@ -11,32 +12,31 @@ use std::error::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
 use tokio::time::{interval, Duration};
 use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream};
+
+use super::payload_signer::Signer;
 
 #[derive(Debug, Default)]
 pub struct SubscriptionClient {
     config: Config,
     ws_subscription_payload: String,
-    connection: Arc<Mutex<Option<WebSocketStream<MaybeTlsStream<TcpStream>>>>>,
     needs_reconnect: Arc<AtomicBool>,
 }
 
 impl SubscriptionClient {
     pub fn new(config: Config) -> Self {
-        let vertex_auth = VertexAuth::new(&config.private_key);
+        let eth_signer = EthSigner::new(&config.private_key);
         let domain = SubscriptionClient::create_domain(&config).unwrap();
 
         let signer =
-            SubscriptionClient::create_signer(config.sender_address.clone(), &vertex_auth, &domain)
+            SubscriptionClient::create_signer(config.sender_address.clone(), &eth_signer, &domain)
                 .unwrap();
         let ws_subscription_payload = signer.construct_ws_auth_payload().unwrap();
 
         SubscriptionClient {
             config,
             ws_subscription_payload,
-            connection: Arc::new(Mutex::new(None)),
             needs_reconnect: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -44,22 +44,22 @@ impl SubscriptionClient {
     pub async fn start_subscription(&self) -> Result<(), Box<dyn Error + Send>> {
         let subscribe_url = self.config.arbitrum_vertex_testnet_subscribe_url.clone();
 
-        let mut conn_guard = self.connection.lock().await;
-        if let Some(mut existing_conn) = conn_guard.take() {
-            let close_msg = Message::Close(None);
-            if let Err(e) = existing_conn.send(close_msg).await {
-                println!("Error sending close message: {:?}", e);
-            }
-        }
+        // Establish WebSocket connection
+        let ws_stream = connect_websocket(&subscribe_url).await?;
+        let (mut ws_writer, ws_reader) = ws_stream.split();
 
-        let ws_stream =
-            connect_and_authenticate(&subscribe_url, self.ws_subscription_payload.as_str()).await?;
-        let (ws_writer, ws_reader) = ws_stream.split();
+        // Send authentication payload (if needed) immediately after establishing the connection
+        ws_writer
+            .send(Message::Text(self.ws_subscription_payload.clone()))
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn Error + Send>)?;
 
+        // Listen to messages in a separate task
         tokio::spawn(async move {
-            listen_to_messages(ws_reader).await;
+            handle_websocket_messages(ws_reader).await;
         });
 
+        // Start the ping task to keep the connection alive
         let needs_reconnect_clone = Arc::clone(&self.needs_reconnect);
         tokio::spawn(async move {
             SubscriptionClient::start_ping(ws_writer, needs_reconnect_clone).await;
@@ -85,10 +85,10 @@ impl SubscriptionClient {
 
     fn create_signer<'a>(
         sender_address: String,
-        vertex_auth: &'a VertexAuth,
+        eth_signer: &'a EthSigner,
         domain: &'a Eip712Domain,
     ) -> Result<Signer<'a>, Box<dyn std::error::Error>> {
-        Ok(Signer::new(sender_address, vertex_auth, domain))
+        Ok(Signer::new(sender_address, eth_signer, domain))
     }
 
     fn create_domain(config: &Config) -> Result<Eip712Domain, Box<dyn std::error::Error>> {
@@ -112,21 +112,32 @@ impl SubscriptionClient {
 
     pub async fn check_and_reconnect(&self) {
         if self.needs_reconnect.load(Ordering::Relaxed) {
-            let ws_stream = connect_and_authenticate(
-                &self.config.arbitrum_vertex_testnet_subscribe_url,
-                &self.ws_subscription_payload,
-            )
-            .await
-            .unwrap();
-            let (ws_writer, ws_reader) = ws_stream.split();
+            // Connect to the WebSocket
+            let ws_stream = connect_websocket(&self.config.arbitrum_vertex_testnet_subscribe_url)
+                .await
+                .expect("Failed to reconnect to WebSocket");
 
+            // Split the WebSocket stream
+            let (mut ws_writer, ws_reader) = ws_stream.split();
+
+            // Reset the reconnection flag
             self.needs_reconnect.store(false, Ordering::Relaxed);
 
+            // Resend the authentication payload if necessary
+            ws_writer
+                .send(Message::Text(self.ws_subscription_payload.clone()))
+                .await
+                .expect("Failed to send auth payload");
+
+            // Spawn a task to listen to messages
             tokio::spawn(async move {
-                listen_to_messages(ws_reader).await;
+                handle_websocket_messages(ws_reader).await;
             });
 
+            // Clone `needs_reconnect` for the ping task
             let needs_reconnect_clone = Arc::clone(&self.needs_reconnect);
+
+            // Spawn a task for sending pings
             tokio::spawn(async move {
                 SubscriptionClient::start_ping(ws_writer, needs_reconnect_clone).await;
             });

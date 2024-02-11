@@ -1,9 +1,12 @@
-use futures_util::{SinkExt, StreamExt}; // used by ws_stream to send
+use futures_util::{stream::SplitStream, SinkExt, StreamExt};
 use tokio::net::TcpStream;
-use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
-use tungstenite::Message;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+use tungstenite::protocol::Message;
 
-use crate::{config::Config, utils::errors::connect_error::ConnectError};
+use crate::{
+    config::Config,
+    shared::{errors::connect_error::ConnectError, utils::websocket_utils::connect_websocket},
+};
 
 #[derive(Debug, Default)]
 pub struct GatewayClient {
@@ -18,47 +21,35 @@ impl GatewayClient {
     pub async fn connect_to_gateway(
         &self,
     ) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, ConnectError> {
-        let (ws_stream, _) = connect_async(&self.config.arbitrum_vertex_testnet_gateway_url)
-            .await
-            .unwrap();
-        Ok(ws_stream)
+        // Use the generic connection function
+        connect_websocket(&self.config.arbitrum_vertex_testnet_gateway_url).await
     }
 
     pub async fn send_query_with_type(
         &self,
         query_message: String,
     ) -> Result<String, ConnectError> {
-        let mut ws_stream = self.connect_to_gateway().await?;
-        // Construct and send the query based on the query_type argument
-        self.send_and_receive(&mut ws_stream, &query_message).await
-    }
+        let ws_stream = self.connect_to_gateway().await?;
+        let (mut ws_writer, ws_reader) = ws_stream.split();
 
-    // pub async fn place_order(&self, query_type:&str) -> Result<String, ConnectError> {
-    //     let mut ws_stream= self.connect_to_gateway().await?;
-
-    //     // get product id
-    //     // sign payload
-    //     // Construct and send place order payload
-    //     let query_message = serde_json::json!({
-
-    //     }).to_string();
-
-    //     ws_stream
-    //     .send(Message::Text(place_order_message)
-    // }
-
-    // send payload or recieve response from websocket
-    async fn send_and_receive(
-        &self,
-        ws_stream: &mut WebSocketStream<MaybeTlsStream<TcpStream>>,
-        message: &str,
-    ) -> Result<String, ConnectError> {
-        ws_stream
-            .send(Message::Text(message.to_string()))
+        // Send the query message
+        ws_writer
+            .send(Message::Text(query_message.clone()))
             .await
             .map_err(|e| ConnectError::new(e.into()))?;
 
-        if let Some(response) = ws_stream.next().await {
+        // Listen for a response
+        let response = self.await_response(ws_reader).await?;
+
+        Ok(response)
+    }
+
+    // Await a single response message
+    async fn await_response(
+        &self,
+        mut ws_reader: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+    ) -> Result<String, ConnectError> {
+        if let Some(response) = ws_reader.next().await {
             match response {
                 Ok(msg) => match msg {
                     Message::Text(text) => Ok(text),

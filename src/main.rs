@@ -3,7 +3,7 @@ mod config;
 mod connectors;
 mod domain;
 mod services;
-mod utils;
+mod shared;
 
 // Include the generated protobuf code
 // Include the generated protobuf modules

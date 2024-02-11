@@ -6,7 +6,7 @@ use crate::trading_service::{ConnectionRequest, ConnectionResponse};
 use crate::vertex_query::vertex_query_service_server::VertexQueryService;
 use crate::vertex_query::{StatusRequest, StatusResponse};
 
-use crate::utils::errors::api_error::ApiError;
+use crate::shared::errors::api_error::ApiError;
 use axum::{Extension, Json};
 use http::StatusCode;
 use std::sync::Arc;

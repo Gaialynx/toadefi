@@ -1,6 +1,6 @@
 use tonic::Status;
 
-use crate::utils::errors::connect_error::ConnectError;
+use crate::shared::errors::connect_error::ConnectError;
 
 use super::client::VertexClient;
 
