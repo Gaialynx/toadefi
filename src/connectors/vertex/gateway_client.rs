@@ -2,46 +2,53 @@ use futures_util::{stream::SplitStream, SinkExt, StreamExt};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tungstenite::protocol::Message;
+use log::error; 
 
 use crate::{
-    config::Config,
+    config::CONFIG,
     shared::{errors::connect_error::ConnectError, utils::websocket_utils::connect_websocket},
 };
 
 #[derive(Debug, Default)]
-pub struct GatewayClient {
-    config: Config,
-}
+pub struct GatewayClient {}
 
 impl GatewayClient {
-    pub fn new(config: Config) -> Self {
-        GatewayClient { config }
+    pub fn new() -> Self {
+        GatewayClient {}
     }
 
     pub async fn connect_to_gateway(
         &self,
     ) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, ConnectError> {
         // Use the generic connection function
-        connect_websocket(&self.config.arbitrum_vertex_testnet_gateway_url).await
+        connect_websocket(&CONFIG.arbitrum_vertex_testnet_gateway_url).await
     }
 
-    pub async fn send_query_with_type(
-        &self,
-        query_message: String,
-    ) -> Result<String, ConnectError> {
-        let ws_stream = self.connect_to_gateway().await?;
+    pub async fn send_message(&self, message: String) -> Result<String, ConnectError> {
+        let ws_stream = match self.connect_to_gateway().await {
+            Ok(stream) => stream,
+            Err(e) => {
+                error!("Failed to connect to gateway: {}", e); // Log the error
+                return Err(e);
+            }
+        };
+    
         let (mut ws_writer, ws_reader) = ws_stream.split();
-
+    
         // Send the query message
-        ws_writer
-            .send(Message::Text(query_message.clone()))
-            .await
-            .map_err(|e| ConnectError::new(e.into()))?;
-
+        if let Err(e) = ws_writer.send(Message::Text(message.clone())).await {
+            error!("Failed to send message: {}", e); // Log the error
+            return Err(ConnectError::new(e.into()));
+        }
+    
         // Listen for a response
-        let response = self.await_response(ws_reader).await?;
-
-        Ok(response)
+        match self.await_response(ws_reader).await {
+            Ok(response) => Ok(response),
+            Err(e) => {
+                error!("Error awaiting response: {}", e); // Log the error
+                Err(e)
+            }
+        }
     }
 
     // Await a single response message
@@ -49,16 +56,27 @@ impl GatewayClient {
         &self,
         mut ws_reader: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     ) -> Result<String, ConnectError> {
-        if let Some(response) = ws_reader.next().await {
-            match response {
+        match ws_reader.next().await {
+            Some(response) => match response {
                 Ok(msg) => match msg {
                     Message::Text(text) => Ok(text),
-                    _ => Err(ConnectError::new(tungstenite::Error::AlreadyClosed)),
+                    _ => {
+                        let err = ConnectError::new(tungstenite::Error::AlreadyClosed);
+                        error!("Received a non-text message: {}", err); // Log the error
+                        Err(err)
+                    }
                 },
-                Err(e) => Err(ConnectError::new(e.into())),
+                Err(e) => {
+                    let err = ConnectError::new(e.into());
+                    error!("Error reading message: {}", err); // Log the error
+                    Err(err)
+                },
+            },
+            None => {
+                let err = ConnectError::new(tungstenite::Error::AlreadyClosed);
+                error!("WebSocket closed unexpectedly: {}", err); // Log the error
+                Err(err)
             }
-        } else {
-            Err(ConnectError::new(tungstenite::Error::AlreadyClosed))
         }
     }
 }

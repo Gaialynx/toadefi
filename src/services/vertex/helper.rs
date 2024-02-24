@@ -16,8 +16,6 @@ impl VertexHelper for VertexClient {
     }
 
     async fn send_message_to_gateway(&self, query_message: String) -> Result<String, ConnectError> {
-        self.gateway_client
-            .send_query_with_type(query_message)
-            .await
+        self.gateway_client.send_message(query_message).await
     }
 }

@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::CONFIG;
 use crate::shared::utils::{
     eth_signer::EthSigner,
     websocket_utils::{connect_websocket, handle_websocket_messages},
@@ -19,30 +19,28 @@ use super::payload_signer::Signer;
 
 #[derive(Debug, Default)]
 pub struct SubscriptionClient {
-    config: Config,
     ws_subscription_payload: String,
     needs_reconnect: Arc<AtomicBool>,
 }
 
 impl SubscriptionClient {
-    pub fn new(config: Config) -> Self {
-        let eth_signer = EthSigner::new(&config.private_key);
-        let domain = SubscriptionClient::create_domain(&config).unwrap();
+    pub fn new() -> Self {
+        let eth_signer = EthSigner::new(&CONFIG.private_key);
+        let domain = SubscriptionClient::create_domain().unwrap();
 
         let signer =
-            SubscriptionClient::create_signer(config.sender_address.clone(), &eth_signer, &domain)
+            SubscriptionClient::create_signer(&CONFIG.sender_address, &eth_signer, &domain)
                 .unwrap();
         let ws_subscription_payload = signer.construct_ws_auth_payload().unwrap();
 
         SubscriptionClient {
-            config,
             ws_subscription_payload,
             needs_reconnect: Arc::new(AtomicBool::new(false)),
         }
     }
 
     pub async fn start_subscription(&self) -> Result<(), Box<dyn Error + Send>> {
-        let subscribe_url = self.config.arbitrum_vertex_testnet_subscribe_url.clone();
+        let subscribe_url = CONFIG.arbitrum_vertex_testnet_subscribe_url.clone();
 
         // Establish WebSocket connection
         let ws_stream = connect_websocket(&subscribe_url).await?;
@@ -84,21 +82,21 @@ impl SubscriptionClient {
     }
 
     fn create_signer<'a>(
-        sender_address: String,
+        sender_address: &'a String,
         eth_signer: &'a EthSigner,
         domain: &'a Eip712Domain,
     ) -> Result<Signer<'a>, Box<dyn std::error::Error>> {
         Ok(Signer::new(sender_address, eth_signer, domain))
     }
 
-    fn create_domain(config: &Config) -> Result<Eip712Domain, Box<dyn std::error::Error>> {
+    fn create_domain() -> Result<Eip712Domain, Box<dyn std::error::Error>> {
         let verifying_contract_bytes =
-            hex::decode(config.arbitrum_testnet_contract.trim_start_matches("0x"))?;
+            hex::decode(CONFIG.arbitrum_testnet_contract.trim_start_matches("0x"))?;
         let mut bytes = [0u8; 20];
         bytes.copy_from_slice(&verifying_contract_bytes);
         let verifying_contract = Address::from(bytes);
 
-        let chain_id_value: Uint<256, 4> = Uint::from(config.arbitrum_testnet_chain_id);
+        let chain_id_value: Uint<256, 4> = Uint::from(CONFIG.arbitrum_testnet_chain_id);
         let chain_id = Some(chain_id_value);
 
         Ok(Eip712Domain {
@@ -113,7 +111,7 @@ impl SubscriptionClient {
     pub async fn check_and_reconnect(&self) {
         if self.needs_reconnect.load(Ordering::Relaxed) {
             // Connect to the WebSocket
-            let ws_stream = connect_websocket(&self.config.arbitrum_vertex_testnet_subscribe_url)
+            let ws_stream = connect_websocket(&CONFIG.arbitrum_vertex_testnet_subscribe_url)
                 .await
                 .expect("Failed to reconnect to WebSocket");
 

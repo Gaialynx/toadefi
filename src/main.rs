@@ -36,16 +36,17 @@ use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    env_logger::builder().filter_level(log::LevelFilter::Error).init();
     // Set up tracing
     let subscriber = FmtSubscriber::builder().finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     // Create a new instance of the SubscriptionClient
     let config = Config::new();
-    let subscription_client = Arc::new(SubscriptionClient::new(config.clone()));
+    let subscription_client = Arc::new(SubscriptionClient::new());
 
     // Create a new instance of the GatewayClient
-    let gateway_client = Arc::new(GatewayClient::new(config.clone()));
+    let gateway_client = Arc::new(GatewayClient::new());
     let trading_service = VertexClient {
         subscription_client: Arc::clone(&subscription_client),
         gateway_client: Arc::clone(&gateway_client),
@@ -72,6 +73,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ))
             .add_service(tonic_web::enable(
                 vertex_query::vertex_query_service_server::VertexQueryServiceServer::new(
+                    VertexClient {
+                        subscription_client: Arc::clone(&subscription_client),
+                        gateway_client: Arc::clone(&gateway_client),
+                    },
+                ),
+            ))
+            .add_service(tonic_web::enable(
+                vertex_execute::vertex_execute_service_server::VertexExecuteServiceServer::new(
                     VertexClient {
                         subscription_client: Arc::clone(&subscription_client),
                         gateway_client: Arc::clone(&gateway_client),
