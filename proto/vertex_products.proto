@@ -1,6 +1,8 @@
 syntax = "proto3";
 package vertex_products;
 
+import "google/protobuf/wrappers.proto";
+
 message ProductsResponse {
     string status = 1;
     ProductsData data = 2;
@@ -9,7 +11,7 @@ message ProductsResponse {
   
   message ProductsData {
     repeated ProductDetail spot_products = 1;
-    // Add perp_products if needed
+    repeated ProductDetail perp_products = 2; 
   }
   
   message ProductDetail {
@@ -27,7 +29,7 @@ message ProductsResponse {
     string short_weight_initial_x18 = 2;
     string long_weight_maintenance_x18 = 3;
     string short_weight_maintenance_x18 = 4;
-    string large_position_penalty_x18 = 5;
+    google.protobuf.StringValue large_position_penalty_x18 = 5;
   }
   
   message Config {
@@ -39,17 +41,25 @@ message ProductsResponse {
   }
   
   message State {
-    string cumulative_deposits_multiplier_x18 = 1;
-    string cumulative_borrows_multiplier_x18 = 2;
-    string total_deposits_normalized = 3;
-    string total_borrows_normalized = 4;
+    google.protobuf.StringValue cumulative_deposits_multiplier_x18 = 1;
+    google.protobuf.StringValue cumulative_borrows_multiplier_x18 = 2;
+    google.protobuf.StringValue total_deposits_normalized = 3;
+    google.protobuf.StringValue total_borrows_normalized = 4;
   }
   
-  message LPState {
+message LPState {
     string supply = 1;
-    Quote quote = 2;
-    Base base = 3;
-  }
+
+    oneof quote_field {
+        string quote_string = 2;
+        Quote quote_object = 3;
+    }
+
+    oneof base_field {
+        string base_string = 4;
+        Base base_object = 5;
+    }
+}
   
   message Quote {
     string amount = 1;

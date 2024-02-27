@@ -1,4 +1,5 @@
 use dotenvy::dotenv;
+use lazy_static::lazy_static;
 use std::env;
 
 #[derive(Debug, Default, Clone)]
@@ -32,4 +33,8 @@ impl Config {
                 .expect("ARBITRUM_VERTEX_TESTNET_GATEWAY_URL is not set"),
         }
     }
+}
+
+lazy_static! {
+    pub static ref CONFIG: Config = Config::new();
 }

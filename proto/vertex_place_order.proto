@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package vertex_execute;
+
+message Order {
+    bytes sender = 1;
+    string priceX18 = 2;
+    string amount = 3;
+}
+
+message PlaceOrderRequest {
+    string product_id = 1;
+    Order order = 2;
+    optional string digest = 3;
+    optional bool spot_leverage = 4;
+    optional int64 id = 5;
+}
+
+message PlaceOrderResponse {
+    string status = 1;
+    string signature = 2;
+    OrderData data = 3;
+    string request_type = 4;
+    uint64 id = 5;
+}
+
+message OrderData {
+    string digest = 1;
+}
