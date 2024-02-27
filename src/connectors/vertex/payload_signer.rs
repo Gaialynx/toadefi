@@ -108,7 +108,7 @@ impl<'a> Signer<'a> {
                 "product_id": product_id,
                 "order": order_value,
                 "signature": signature,
-                "id": id
+                "id": id,
             }
         })
         .to_string();

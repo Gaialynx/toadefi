@@ -1,15 +1,12 @@
 use alloy_sol_types::Eip712Domain;
+use serde_json::json;
 use tonic::{Request, Response, Status};
 use log::{info, error};
 
 use crate::{
-    config::CONFIG,
-    connectors::vertex::payload_signer::Signer,
-    domain::models::vertex::sol_structs::Order,
-    shared::utils::{eth_signer::EthSigner, type_conv::{hex_to_fixed_bytes32, pad_to_fixed_bytes32, vec_to_fixed_bytes32}},
-    vertex_execute::{
-        vertex_execute_service_server::VertexExecuteService, PlaceOrderRequest, PlaceOrderResponse,
-    },
+    config::CONFIG, connectors::vertex::payload_signer::Signer, domain::models::vertex::sol_structs::Order, services::vertex::helper::VertexHelper, shared::utils::{eth_signer::EthSigner, type_conv::{hex_to_fixed_bytes32, pad_to_fixed_bytes32, vec_to_fixed_bytes32}}, vertex_execute::{
+        vertex_execute_service_server::VertexExecuteService, CancelAllForProductRequest, CancelOrderRequest, CancelOrderResponse, PlaceOrderRequest, PlaceOrderResponse
+    }
 };
 
 use super::client::VertexClient;
@@ -42,14 +39,8 @@ impl VertexExecuteService for VertexClient {
                 Ok(amount) => amount,
                 Err(e) => return Err(Status::internal(format!("Amount parsing error: {}", e))),
             },
-            expiration: match order_request.expiration.parse() {
-                Ok(expiration) => expiration,
-                Err(e) => return Err(Status::internal(format!("Expiration parsing error: {}", e))),
-            },
-            nonce: match order_request.nonce.parse() {
-                Ok(nonce) => nonce,
-                Err(e) => return Err(Status::internal(format!("Nonce parsing error: {}", e))),
-            },
+            expiration: self.generate_expiration_time(3600),
+            nonce: self.generate_nonce(),
         };
 
         // Create an EthSigner instance and bind it to a variable
@@ -90,6 +81,82 @@ impl VertexExecuteService for VertexClient {
                 Err(Status::internal("Failed to send order to gateway"))
             },
         }
+    }
+
+    async fn cancel_order(&self, request: Request<CancelOrderRequest>,) -> Result<Response<CancelOrderResponse>, Status> {
+        let cancel_order_request = request.into_inner();
+        let cancel_payload = json!({
+            "cancel_orders": {
+                "tx": {
+                    "sender": cancel_order_request.sender, // Assuming you have a sender_address field in VertexClient
+                    "productIds": cancel_order_request.product_ids,
+                    "digests": cancel_order_request.digests,
+                    "nonce": self.generate_nonce()
+                },
+                "signature": "" // You'll need to generate a signature based on your protocol
+            }
+        });
+
+        let payload_str = cancel_payload.to_string();
+        match self.gateway_client.send_message(payload_str).await {
+            Ok(response_data) => {
+                // Log the raw response data for debugging
+                info!("Raw gateway response: {}", response_data);
+        
+                match serde_json::from_str::<CancelOrderResponse>(&response_data) {
+                    Ok(response) => {
+                        info!("Order placed successfully");
+                        Ok(Response::new(response))
+                    },
+                    Err(e) => {
+                        error!("Failed to parse response: {}", e);
+                        Err(Status::internal("Failed to parse gateway response"))
+                    },
+                }
+            },
+            Err(e) => {
+                error!("Failed to send order to gateway: {}", e);
+                Err(Status::internal("Failed to send order to gateway"))
+            },
+        }
+    }
+
+    async fn cancel_all_for_product(&self, request: Request<CancelAllForProductRequest>) -> Result<Response<CancelOrderResponse>, Status> {
+        let cancel_all_payload = json!({
+            "cancel_product_orders": {
+                "tx": {
+                    "sender": self.sender_address,
+                    "productIds": [product_id],
+                    "nonce": self.generate_nonce()
+                },
+                "signature": "", // Generate signature
+                "digest": null
+            }
+        });
+
+        let payload_str = cancel_all_payload.to_string();
+        self.send_message_to_gateway(payload_str).await.map_err(|e| Status::internal(e.to_string()))
+    }
+
+    async fn cancel_and_place(&self, cancel_product_ids: Vec<u32>, cancel_digests: Vec<String>, new_order: Order) -> Result<(), Status> {
+        // Assuming you have a method to generate the payload for a new order
+        let new_order_payload = self.generate_order_payload(&new_order)?;
+
+        let cancel_and_place_payload = json!({
+            "cancel_and_place": {
+                "cancel_tx": {
+                    "sender": self.sender_address,
+                    "productIds": cancel_product_ids,
+                    "digests": cancel_digests,
+                    "nonce": self.generate_nonce()
+                },
+                "cancel_signature": "", // Generate cancel signature
+                "place_order": new_order_payload
+            }
+        });
+
+        let payload_str = cancel_and_place_payload.to_string();
+        self.send_message_to_gateway(payload_str).await.map_err(|e| Status::internal(e.to_string()))
     }
 }
 
