@@ -7,19 +7,21 @@ use alloy_primitives::{Address, Uint};
 use alloy_sol_types::Eip712Domain;
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
+use serde_json::json;
 use std::borrow::Cow;
 use std::error::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::net::TcpStream;
 use tokio::time::{interval, Duration};
 use tokio_tungstenite::{tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream};
 
 use super::payload_signer::Signer;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct SubscriptionClient {
-    ws_subscription_payload: String,
+    signer: Signer, 
     needs_reconnect: Arc<AtomicBool>,
 }
 
@@ -28,13 +30,10 @@ impl SubscriptionClient {
         let eth_signer = EthSigner::new(&CONFIG.private_key);
         let domain = SubscriptionClient::create_domain().unwrap();
 
-        let signer =
-            SubscriptionClient::create_signer(&CONFIG.sender_address, &eth_signer, &domain)
-                .unwrap();
-        let ws_subscription_payload = signer.construct_ws_auth_payload().unwrap();
+        let signer =Signer::new();
 
         SubscriptionClient {
-            ws_subscription_payload,
+            signer,
             needs_reconnect: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -46,9 +45,23 @@ impl SubscriptionClient {
         let ws_stream = connect_websocket(&subscribe_url).await?;
         let (mut ws_writer, ws_reader) = ws_stream.split();
 
+        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        let expiration = current_time + 60_000; // Example expiration time set to 1 minute from now
+        
+        let signature = self.signer.sign_subscription_auth_payload(&CONFIG.sender_address);
+        let ws_subscription_payload = json!({
+            "method": "authenticate",
+            "id": 0,
+            "tx": {
+                "sender": CONFIG.sender_address, // Use the sender address from your config
+                "expiration": expiration, // Use the calculated expiration time
+            },
+            "signature": signature
+        });
+        
         // Send authentication payload (if needed) immediately after establishing the connection
         ws_writer
-            .send(Message::Text(self.ws_subscription_payload.clone()))
+            .send(Message::Text(ws_subscription_payload.to_string()))
             .await
             .map_err(|e| Box::new(e) as Box<dyn Error + Send>)?;
 
@@ -81,13 +94,6 @@ impl SubscriptionClient {
         }
     }
 
-    fn create_signer<'a>(
-        sender_address: &'a String,
-        eth_signer: &'a EthSigner,
-        domain: &'a Eip712Domain,
-    ) -> Result<Signer<'a>, Box<dyn std::error::Error>> {
-        Ok(Signer::new(sender_address, eth_signer, domain))
-    }
 
     fn create_domain() -> Result<Eip712Domain, Box<dyn std::error::Error>> {
         let verifying_contract_bytes =
@@ -121,9 +127,23 @@ impl SubscriptionClient {
             // Reset the reconnection flag
             self.needs_reconnect.store(false, Ordering::Relaxed);
 
+            let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+            let expiration = current_time + 60_000; // Example expiration time set to 1 minute from now
+            
+            let signature = self.signer.sign_subscription_auth_payload(&CONFIG.sender_address);
+            let ws_subscription_payload = json!({
+                "method": "authenticate",
+                "id": 0,
+                "tx": {
+                    "sender": CONFIG.sender_address, // Use the sender address from your config
+                    "expiration": expiration, // Use the calculated expiration time
+                },
+                "signature": signature
+            });
+
             // Resend the authentication payload if necessary
             ws_writer
-                .send(Message::Text(self.ws_subscription_payload.clone()))
+                .send(Message::Text(ws_subscription_payload.to_string()))
                 .await
                 .expect("Failed to send auth payload");
 
