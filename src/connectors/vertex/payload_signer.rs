@@ -1,133 +1,79 @@
-use crate::domain::models::vertex::serializable_structs::SerializableOrder;
-use crate::domain::models::vertex::sol_structs::Order;
-use crate::domain::models::vertex::{
-    serializable_structs::SerializableStreamAuthentication, sol_structs::StreamAuthentication,
-};
+use crate::config::CONFIG;
+use crate::domain::models::vertex::sol_structs::{Order, StreamAuthentication};
 use crate::shared::utils::eth_signer::EthSigner;
 use crate::shared::utils::type_conv;
-use alloy_sol_types::Eip712Domain;
-use regex::Regex;
-use serde_json::{json, Value};
+use alloy_primitives::{Address, Uint};
+use alloy_sol_types::{Eip712Domain, SolStruct};
+use std::borrow::Cow;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-// Signable trait defination
-pub trait Signable {
-    fn serialize_for_signing(&self) -> Result<Vec<u8>, Box<dyn std::error::Error>>;
+#[derive(Debug)]
+pub struct Signer {
+    eth_signer:  EthSigner,
+    domain:  Eip712Domain,
 }
 
-impl Signable for StreamAuthentication {
-    fn serialize_for_signing(&self) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-        // Serialize StreamAuthentication according to your requirements
-        let serializable = SerializableStreamAuthentication::from(self);
-        serde_json::to_vec(&serializable).map_err(Into::into)
-    }
-}
-
-impl Signable for Order {
-    fn serialize_for_signing(&self) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-        // Serialize Order according to your requirements
-        let serializable = SerializableOrder::from(self);
-        serde_json::to_vec(&serializable).map_err(Into::into)
-    }
-}
-
-pub struct Signer<'a> {
-    sender_address: &'a String,
-    eth_signer: &'a EthSigner,
-    domain: &'a Eip712Domain,
-}
-
-impl<'a> Signer<'a> {
+impl Signer {
     pub fn new(
-        sender_address: &'a String,
-        eth_signer: &'a EthSigner,
-        domain: &'a Eip712Domain,
     ) -> Self {
+        let eth_signer = EthSigner::new(&CONFIG.private_key);
+        let domain = create_domain().unwrap();
         Signer {
-            eth_signer,
-            sender_address,
-            domain,
+            eth_signer: eth_signer,
+            domain: domain,
         }
     }
 
-    pub fn construct_ws_auth_payload(&self) -> Result<String, Box<dyn std::error::Error>> {
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64;
+    pub fn sign_subscription_auth_payload(&self,  sender_address:&str) -> String{
+        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
         let expiration = current_time + 60_000; // Expiration time set to 1 minute from now
 
+    
         // Initialize StreamAuthentication using the abstracted method for generating sender bytes
         let tx_data = StreamAuthentication {
-            sender: type_conv::hex_to_fixed_bytes32(self.sender_address)?,
+            sender: type_conv::hex_to_fixed_bytes32(sender_address).unwrap(),
             expiration,
         };
-
-        let serializable_auth = SerializableStreamAuthentication::from(&tx_data);
-        let serialized_auth = serde_json::to_string(&serializable_auth)?;
-        let serialized_auth_value: serde_json::Value = serde_json::from_str(&serialized_auth)?;
-
-        // Leverage the generic sign method to sign the StreamAuthentication data
-        let signature = self.sign(&tx_data)?;
-
-        let payload = serde_json::json!({
-            "method": "authenticate",
-            "id": 0,
-            "tx": serialized_auth_value,
-            "signature": signature
-        })
-        .to_string();
-
-        Ok(payload)
-    }
-
-    // Method to construct payload for placing an order
-    pub fn construct_order_payload(
-        &self,
-        order: &Order,
-        product_id: i32,
-        id: i32,
-    ) -> Result<String, Box<dyn std::error::Error>> {
-        // Serialize the Order for signing
-        let serialized_order_raw = serde_json::to_string(&SerializableOrder::from(order))
-            .map_err(|e| format!("Error serializing order: {}", e))?;
-    
-            let serialized_order = adjust_field_names(&serialized_order_raw)?;
-        println!("Serialized {:?}", serialized_order);
- 
-        // Generate a signature for the serialized Order
-        let signature = self.sign(order)
-            .map_err(|e| format!("Error generating signature: {}", e))?;
-    
-        if signature.is_empty() {
-            return Err("Signature is empty, signing failed".into());
-        }
-    
-        let order_value = serde_json::from_str::<Value>(&serialized_order)?;
         
-        // Construct the nested 'place_order' payload with the order details, signature, and other required fields
-        let payload = json!({
-            "place_order": {
-                "product_id": product_id,
-                "order": order_value,
-                "signature": signature,
-                "id": id,
-            }
-        })
-        .to_string();
-    
-        Ok(payload)
+        let signing_hash = tx_data.eip712_signing_hash(&self.domain);
+        let signature = self
+        .eth_signer
+        .generate_signature(signing_hash.as_ref()).unwrap();
+
+        signature
     }
 
-    // Generic signing method for any Signable struct
-    pub fn sign<T: Signable>(&self, signable: &T) -> Result<String, Box<dyn std::error::Error>> {
-        let serialized_signable = signable.serialize_for_signing()?;
+    pub fn sign_place_order_payload(&self,  order:&Order) -> String{
+        let signing_hash = order.eip712_signing_hash(&self.domain);
         let signature = self
-            .eth_signer
-            .generate_signature(&serialized_signable, self.domain)?;
-        Ok(signature)
+        .eth_signer
+        .generate_signature(signing_hash.as_ref()).unwrap();
+
+        signature
     }
 }
 
 
-pub fn adjust_field_names(serialized: &str) -> Result<String, regex::Error> {
-    let re = Regex::new(r#""price_x18":"#)?; // Match the exact field name in quotes
-    Ok(re.replace_all(serialized, r#""priceX18":"#).into_owned()) // Replace with the desired field name
+// pub fn adjust_field_names(serialized: &str) -> Result<String, regex::Error> {
+//     let re = Regex::new(r#""price_x18":"#)?; // Match the exact field name in quotes
+//     Ok(re.replace_all(serialized, r#""priceX18":"#).into_owned()) // Replace with the desired field name
+// }
+
+fn create_domain() -> Result<Eip712Domain, Box<dyn std::error::Error>> {
+    let verifying_contract_bytes =
+        hex::decode(CONFIG.arbitrum_testnet_contract.trim_start_matches("0x"))?;
+    let mut bytes = [0u8; 20];
+    bytes.copy_from_slice(&verifying_contract_bytes);
+    let verifying_contract = Address::from(bytes);
+
+    let chain_id_value: Uint<256, 4> = Uint::from(CONFIG.arbitrum_testnet_chain_id);
+    let chain_id = Some(chain_id_value);
+
+    Ok(Eip712Domain {
+        name: Some(Cow::Borrowed("Vertex")),
+        version: Some(Cow::Borrowed("0.0.1")),
+        chain_id,
+        verifying_contract: Some(verifying_contract),
+        salt: None,
+    })
 }

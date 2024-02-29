@@ -8,7 +8,7 @@ use crate::{
     },
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct VertexClient {
     // You might want to include shared state here
     pub subscription_client: Arc<SubscriptionClient>,

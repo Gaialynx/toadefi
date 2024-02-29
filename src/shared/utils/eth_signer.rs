@@ -2,6 +2,7 @@ use alloy_primitives::{hex, keccak256, FixedBytes, Keccak256};
 use alloy_sol_types::Eip712Domain;
 use ethsign::{Protected, SecretKey};
 
+#[derive(Debug)]
 pub struct EthSigner {
     private_key: SecretKey,
 }
@@ -16,17 +17,10 @@ impl EthSigner {
 
     pub fn generate_signature(
         &self,
-        serialized_data: &[u8],
-        domain: &Eip712Domain,
+        signing_hash: &[u8],
     ) -> Result<String, Box<dyn std::error::Error>> {
-        // Hash the domain separator and the serialized data together to form the signing hash
-        // Assuming domain_separator() gives you the hashed domain information required for EIP-712
-        let domain_separator = domain.separator();
-        let data_to_hash = [&domain_separator, &keccak256(serialized_data)].concat();
-        let signing_hash = keccak256(&data_to_hash);
-
         // Sign the hash
-        let signature = self.private_key.sign(&signing_hash.as_slice()).unwrap(); // Consider handling this Result instead of unwrapping
+        let signature = self.private_key.sign(signing_hash).unwrap(); // Consider handling this Result instead of unwrapping
         let (r, s, v) = (signature.r, signature.s, signature.v);
 
         // Adjust v for Ethereum signature compatibility (if necessary)
