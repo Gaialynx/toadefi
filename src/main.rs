@@ -36,13 +36,13 @@ use tracing_subscriber::FmtSubscriber;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    Config::new();
     env_logger::builder().filter_level(log::LevelFilter::Error).init();
     // Set up tracing
     let subscriber = FmtSubscriber::builder().finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     // Create a new instance of the SubscriptionClient
-    let config = Config::new();
     let subscription_client = Arc::new(SubscriptionClient::new());
 
     // Create a new instance of the GatewayClient

@@ -9,7 +9,7 @@ message Order {
 }
 
 message PlaceOrderRequest {
-    string product_id = 1;
+    uint32 product_id = 1;
     Order order = 2;
     optional string digest = 3;
     optional bool spot_leverage = 4;
