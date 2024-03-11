@@ -1,14 +1,10 @@
 use crate::config::CONFIG;
 use crate::shared::utils::{
-    eth_signer::EthSigner,
     websocket_utils::{connect_websocket, handle_websocket_messages},
 };
-use alloy_primitives::{Address, Uint};
-use alloy_sol_types::Eip712Domain;
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
-use std::borrow::Cow;
 use std::error::Error;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -27,9 +23,6 @@ pub struct SubscriptionClient {
 
 impl SubscriptionClient {
     pub fn new() -> Self {
-        let eth_signer = EthSigner::new(&CONFIG.private_key);
-        let domain = SubscriptionClient::create_domain().unwrap();
-
         let signer =Signer::new();
 
         SubscriptionClient {
@@ -92,26 +85,6 @@ impl SubscriptionClient {
                 break;
             }
         }
-    }
-
-
-    fn create_domain() -> Result<Eip712Domain, Box<dyn std::error::Error>> {
-        let verifying_contract_bytes =
-            hex::decode(CONFIG.arbitrum_testnet_contract.trim_start_matches("0x"))?;
-        let mut bytes = [0u8; 20];
-        bytes.copy_from_slice(&verifying_contract_bytes);
-        let verifying_contract = Address::from(bytes);
-
-        let chain_id_value: Uint<256, 4> = Uint::from(CONFIG.arbitrum_testnet_chain_id);
-        let chain_id = Some(chain_id_value);
-
-        Ok(Eip712Domain {
-            name: Some(Cow::Borrowed("Vertex")),
-            version: Some(Cow::Borrowed("0.0.1")),
-            chain_id,
-            verifying_contract: Some(verifying_contract),
-            salt: None,
-        })
     }
 
     pub async fn check_and_reconnect(&self) {

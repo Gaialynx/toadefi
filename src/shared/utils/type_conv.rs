@@ -24,13 +24,10 @@ pub fn vec_to_fixed_bytes32(vec: Vec<u8>) -> Result<FixedBytes<32>, &'static str
     }
 }
 
-
-
-
 pub fn pad_to_fixed_bytes32(input: &Vec<u8>) -> Result<FixedBytes<32>, Box<dyn std::error::Error>> {
-   // Ensure the input length is at most 32 bytes
-   if input.len() > 32 {
-    return Err("Input must be at most 32 bytes long".into());
+    // Ensure the input length is at most 32 bytes
+    if input.len() > 32 {
+        return Err("Input must be at most 32 bytes long".into());
     }
 
     // Create a zero-initialized array of 32 bytes
@@ -41,4 +38,8 @@ pub fn pad_to_fixed_bytes32(input: &Vec<u8>) -> Result<FixedBytes<32>, Box<dyn s
 
     // Convert the array to FixedBytes
     Ok(FixedBytes::try_from(bytes)?)
+}
+
+pub fn fixed_bytes_to_hex(bytes: &FixedBytes<32>) -> String {
+    hex::encode(bytes)
 }

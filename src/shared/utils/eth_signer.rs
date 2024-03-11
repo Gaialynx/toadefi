@@ -1,5 +1,4 @@
-use alloy_primitives::{hex, keccak256, FixedBytes, Keccak256};
-use alloy_sol_types::Eip712Domain;
+use alloy_primitives::{hex, FixedBytes, Keccak256};
 use ethsign::{Protected, SecretKey};
 
 #[derive(Debug)]

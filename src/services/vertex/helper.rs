@@ -7,10 +7,10 @@ use crate::shared::errors::connect_error::ConnectError;
 use super::client::VertexClient;
 
 pub trait VertexHelper {
+    fn generate_expiration_time(&self, seconds_from_now: u64, order_type: u8) -> u64;
     fn construct_query_message<T: serde::Serialize>(&self, request: &T) -> Result<String, Status>;
     async fn send_message_to_gateway(&self, query_message: String) -> Result<String, ConnectError>;
     fn generate_nonce(&self) -> u64;
-    fn generate_expiration_time(&self,seconds_from_now: u64) -> u64;
 }
 
 impl VertexHelper for VertexClient {
@@ -24,30 +24,27 @@ impl VertexHelper for VertexClient {
     }
 
     fn generate_nonce(&self) -> u64 {
-        // Get the current time in milliseconds
-        let start = SystemTime::now();
-        let since_the_epoch = start.duration_since(UNIX_EPOCH).expect("Time went backwards");
-        let now_ms = since_the_epoch.as_millis();
-    
-        // Add 50 ms to the current time for the recv_time
-        let recv_time = now_ms + 50;
-    
-        // Generate a random integer for the least significant 20 bits
-        // Note: Make sure to use a proper random function for production code
-        let random_int = 1000; // Example random integer
-    
-        // Combine recv_time and random integer into the nonce
-        ((recv_time << 20) + random_int as u128) as u64
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_millis();
+
+        let random_part = 1000; // Ensure this part is randomly generated in production
+
+        ((now_ms << 20) as u64) + random_part // Shift left by 20 bits and add the random part
     }
 
-    fn generate_expiration_time(&self,seconds_from_now: u64) -> u64 {
-        // Get the current time
+    // order types (0 for default, 1 for IOC, 2 for FOK, and 3 for post-only)
+    fn generate_expiration_time(&self, seconds_from_now: u64, order_type: u8) -> u64 {
         let start = SystemTime::now();
-        let since_the_epoch = start.duration_since(UNIX_EPOCH)
+        let since_the_epoch = start
+            .duration_since(UNIX_EPOCH)
             .expect("Time went backwards");
         let now_secs = since_the_epoch.as_secs();
-    
-        // Add the specified number of seconds to the current time
-        now_secs + seconds_from_now
+
+        let expiration = now_secs + seconds_from_now;
+        let order_type_bits = u64::from(order_type) << 62; // Shift order_type into the most significant 2 bits
+
+        expiration | order_type_bits // Combine expiration with order_type_bits
     }
 }

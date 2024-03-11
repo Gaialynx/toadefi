@@ -6,8 +6,8 @@ import "vertex_place_order.proto";
 
 message CancelOrderRequest {
     repeated uint32 product_ids = 1;
-    repeated string digests = 2;
-    string sender = 3;
+    repeated bytes digests = 2;
+    bytes sender = 3;
     string nonce = 4;
 }
 
@@ -38,14 +38,14 @@ message CancelOrderSuccessData {
 
 message CancelledOrder {
     uint32 product_id = 1;
-    string sender = 2;
+    bytes sender = 2;
     string price_x18 = 3;
     string amount = 4;
     string expiration = 5;
     string order_type = 6;
     string nonce = 7;
     string unfilled_amount = 8;
-    string digest = 9;
+    bytes digest = 9;
     uint64 placed_at = 10;
 }
 
