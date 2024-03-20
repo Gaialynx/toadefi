@@ -43,3 +43,11 @@ pub fn pad_to_fixed_bytes32(input: &Vec<u8>) -> Result<FixedBytes<32>, Box<dyn s
 pub fn fixed_bytes_to_hex(bytes: &FixedBytes<32>) -> String {
     hex::encode(bytes)
 }
+
+pub fn string_and_i128(value: &str) -> i128 {
+    return value.parse::<i128>().map(|val| val as i128).unwrap();
+}
+
+pub fn hex_to_bytes(hex_str: &str) -> Vec<u8> {
+    hex::decode(hex_str).unwrap()
+}
