@@ -1,7 +1,5 @@
 use crate::config::CONFIG;
-use crate::shared::utils::{
-    websocket_utils::{connect_websocket, handle_websocket_messages},
-};
+use crate::shared::utils::websocket_utils::{connect_websocket, handle_websocket_messages};
 use futures_util::stream::SplitSink;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::json;
@@ -17,13 +15,13 @@ use super::payload_signer::Signer;
 
 #[derive(Debug)]
 pub struct SubscriptionClient {
-    signer: Signer, 
+    signer: Signer,
     needs_reconnect: Arc<AtomicBool>,
 }
 
 impl SubscriptionClient {
     pub fn new() -> Self {
-        let signer =Signer::new();
+        let signer = Signer::new(None);
 
         SubscriptionClient {
             signer,
@@ -38,10 +36,15 @@ impl SubscriptionClient {
         let ws_stream = connect_websocket(&subscribe_url).await?;
         let (mut ws_writer, ws_reader) = ws_stream.split();
 
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
         let expiration = current_time + 60_000; // Example expiration time set to 1 minute from now
-        
-        let signature = self.signer.sign_subscription_auth_payload(&CONFIG.sender_address);
+
+        let signature = self
+            .signer
+            .sign_subscription_auth_payload(&CONFIG.sender_address);
         let ws_subscription_payload = json!({
             "method": "authenticate",
             "id": 0,
@@ -51,7 +54,7 @@ impl SubscriptionClient {
             },
             "signature": signature
         });
-        
+
         // Send authentication payload (if needed) immediately after establishing the connection
         ws_writer
             .send(Message::Text(ws_subscription_payload.to_string()))
@@ -100,10 +103,15 @@ impl SubscriptionClient {
             // Reset the reconnection flag
             self.needs_reconnect.store(false, Ordering::Relaxed);
 
-            let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+            let current_time = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
             let expiration = current_time + 60_000; // Example expiration time set to 1 minute from now
-            
-            let signature = self.signer.sign_subscription_auth_payload(&CONFIG.sender_address);
+
+            let signature = self
+                .signer
+                .sign_subscription_auth_payload(&CONFIG.sender_address);
             let ws_subscription_payload = json!({
                 "method": "authenticate",
                 "id": 0,

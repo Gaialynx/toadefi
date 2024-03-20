@@ -3,7 +3,7 @@ syntax = "proto3";
 package vertex_execute;
 
 message Order {
-    bytes sender = 1;
+    string sender = 1;
     string priceX18 = 2;
     string amount = 3;
 }
@@ -19,9 +19,13 @@ message PlaceOrderRequest {
 message PlaceOrderResponse {
     string status = 1;
     string signature = 2;
-    OrderData data = 3;
+    optional OrderData data = 3;
     string request_type = 4;
     uint64 id = 5;
+
+    // on ERR
+    optional uint32 error_code = 6;  
+    optional string error = 7; 
 }
 
 message OrderData {
